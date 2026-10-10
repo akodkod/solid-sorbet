@@ -1,0 +1,29 @@
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  Exclude:
+    - 'vendor/**/*'
+    - 'tmp/**/*'
+    - 'sorbet/**/*'
+    - 'pkg/**/*'
+    - 'spec/typecheck/**/*'
+Layout/LineLength:
+  Max: 120
+Style/Documentation:
+  Enabled: false
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+Metrics:
+  Enabled: false
+
+Naming/FileName:
+  Exclude:
+    - 'lib/solid-sorbet.rb'
+Naming/RescuedExceptionsVariableName:
+  PreferredName: error
+Naming/MemoizedInstanceVariableName:
+  Exclude:
+    - 'lib/solid_queue/sorbet/instance_methods.rb'
+Naming/PredicatePrefix:
+  Exclude:
+    - 'lib/solid_queue/sorbet/rspec/matchers.rb'

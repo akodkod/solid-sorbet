@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "fileutils"
+require "open3"
+require "solid_queue/sorbet"
+require "tapioca/dsl"
+require "tapioca/dsl/compilers/active_job"
+require "tapioca/dsl/compilers/solid_queue_sorbet"
+require_relative "../spec/support/jobs"
+
+root = File.expand_path("..", __dir__)
+directory = File.join(root, "tmp/typecheck")
+FileUtils.mkdir_p(directory)
+classes = [TypedJob, ChildJob, ReplacementJob, EmptyJob, ComplexJob]
+tree = RBI::Tree.new
+pipeline = Tapioca::Dsl::Pipeline.new(requested_constants: classes)
+classes.each do |klass|
+  [Tapioca::Dsl::Compilers::ActiveJob, Tapioca::Dsl::Compilers::SolidQueueSorbet].each do |compiler|
+    compiler.new(pipeline, tree, klass, []).decorate
+  end
+end
+rbi_path = File.join(directory, "jobs.rbi")
+File.write(rbi_path, "# typed: true\n#{tree.string}")
+# Keep the actual struct declarations; job implementations are intentionally
+# untyped here because this check targets the generated public contract.
+jobs_path = File.join(directory, "jobs.rb")
+File.write(jobs_path, "# typed: false\n#{File.read(File.join(root, 'spec/support/jobs.rb'))}")
+binary = File.join(Gem.loaded_specs.fetch("sorbet-static").full_gem_path, "libexec/sorbet")
+base = [binary, "--no-config", "--no-error-count", "--silence-dev-message",
+        File.join(root, "spec/typecheck/framework.rbi"), jobs_path, rbi_path]
+output, status = Open3.capture2e(*base, File.join(root, "spec/typecheck/valid.rb"))
+abort output unless status.success?
+output, status = Open3.capture2e(*base, File.join(root, "spec/typecheck/invalid.rb"))
+abort "Invalid calls unexpectedly typechecked" if status.success?
+File.readlines(File.join(root, "spec/typecheck/invalid.rb")).each_with_index do |source, index|
+  next if source.strip.empty? || source.start_with?("#")
+
+  line = index + 1
+  abort "Expected a type error on invalid.rb:#{line}\n#{output}" unless output.include?("invalid.rb:#{line}:")
+end
+puts "Sorbet: valid calls pass; all seven invalid calls rejected."

@@ -1,0 +1,5 @@
+--dir
+spec/typecheck
+--dir
+tmp/typecheck
+--ignore=invalid.rb

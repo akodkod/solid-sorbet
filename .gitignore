@@ -1,0 +1,8 @@
+/.bundle/
+/Gemfile.lock
+/vendor/
+/tmp/
+/pkg/
+/coverage/
+/sorbet/cache/
+*.gem

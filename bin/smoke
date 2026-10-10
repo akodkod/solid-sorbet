@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "fileutils"
+require "open3"
+require "rubygems/package"
+require "rubygems/dependency_installer"
+
+root = File.expand_path("..", __dir__)
+directory = File.join(root, "tmp/install")
+FileUtils.mkdir_p(directory)
+spec = Gem::Specification.load(File.join(root, "solid-sorbet.gemspec"))
+package = Gem::Package.build(spec)
+FileUtils.mv(package, File.join(directory, package))
+Gem::DependencyInstaller.new(install_dir: directory, ignore_dependencies: true, document: []).install(
+  File.join(directory, package)
+)
+env = { "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil,
+        "GEM_PATH" => ([directory] + Gem.path).join(File::PATH_SEPARATOR) }
+code = <<~RUBY
+  require "solid-sorbet"
+  require "solid_queue/sorbet"
+  abort "Optional test tools loaded" if defined?(Tapioca) || defined?(RSpec)
+  class SmokeJob < ActiveJob::Base
+    include SolidQueue::Sorbet
+    class Args < T::Struct
+      const :value, Integer
+    end
+    def run = value
+  end
+  ActiveJob::Base.logger = Logger.new(File::NULL)
+  abort "Wrong result" unless SmokeJob.run_sync(value: 7) == 7
+  puts "Installed gem loads and executes without Tapioca or RSpec."
+RUBY
+output, status = Open3.capture2e(env, RbConfig.ruby, "-e", code, chdir: directory)
+abort output unless status.success?
+puts output
